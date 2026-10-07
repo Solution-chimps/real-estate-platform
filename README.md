@@ -83,10 +83,31 @@ A suite usa o perfil `test` (H2 em memoria) com fixtures proprios em `src/test/r
 
 Todos os cookies sao `HttpOnly; Secure; SameSite=Strict; Path=/api`. Detalhes em `docs/security.md`.
 
+## Sessao `CFID` e keep-alive
+
+| Aspecto | Comportamento |
+|---|---|
+| Cookie | `CFID`, token opaco de 256 bits (base64url); so o browser o guarda e reenvia. O frontend nunca le, armazena ou intercepta o valor |
+| Armazenamento | Tabela `user_session` com o SHA-256 do token; o token em si nunca e gravado |
+| Inatividade | 2 h sem requisicoes encerram a sessao (`app.security.session-idle-timeout`) |
+| Limite absoluto | 8 h apos o login, com ou sem atividade (`app.security.session-absolute-ttl`) |
+| Keep-alive | `POST /api/auth/alive` renova a janela de inatividade; o painel chama a cada 5 min enquanto estiver aberto |
+| Revogacao | `POST /api/auth/logout` grava `revoked_at`; a sessao morre em todas as abas na hora |
+| Limite por usuario | 5 sessoes ativas (`app.security.max-sessions-per-user`); a mais antiga e revogada ao abrir a sexta |
+| Cookie invalido | Resposta traz `Set-Cookie: CFID=; Max-Age=0` e a requisicao segue anonima (`401` nas rotas protegidas) |
+| Limpeza | Job diario (03:00) apaga sessoes expiradas ou revogadas ha mais de 7 dias |
+
 ## Endpoints
 
 | Metodo | Caminho | Acesso | Descricao |
 |---|---|---|---|
+| GET | `/api/auth/csrf` | publico | Emite o cookie `XSRF-TOKEN` e devolve `{ headerName, token }` para o header `X-XSRF-TOKEN` |
+| POST | `/api/auth/login` | publico | `{ email, password }`; devolve `{ mfaRequired, enrollmentRequired }` e o cookie de desafio `constantino_mfa` (5 min) |
+| POST | `/api/auth/mfa/setup` | desafio MFA | Primeiro acesso: devolve `{ secret, otpauthUri }` do autenticador (exibido uma unica vez) |
+| POST | `/api/auth/mfa/verify` | desafio MFA | `{ code }` TOTP; abre a sessao e responde com `Set-Cookie: CFID=<token opaco>` (8 h) |
+| POST | `/api/auth/alive` | sessao (`CFID`) | Keep-alive: renova a janela de inatividade de 2 h; `204` |
+| GET | `/api/auth/me` | sessao (`CFID`) | Usuario da sessao `{ name, email, role }` |
+| POST | `/api/auth/logout` | sessao (`CFID`) | Revoga a sessao no servidor e expira os cookies; `204` |
 | GET | `/api/properties` | publico | Imoveis publicados; filtros `purpose`, `type`, `neighborhood`, `query`; paginado |
 | GET | `/api/properties/neighborhoods` | publico | Bairros com imovel publicado |
 | GET | `/api/properties/{id}` | publico | Imovel publicado |
