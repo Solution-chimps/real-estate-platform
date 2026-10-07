@@ -11,9 +11,10 @@ A especificacao OpenAPI gerada pelo springdoc fica em `/v3/api-docs` e o Swagger
 | GET | `/csrf` | | `200 { headerName, token }` + cookie `XSRF-TOKEN` |
 | POST | `/login` | `{ email, password }` | `200 { mfaRequired: true, enrollmentRequired }` + cookie `constantino_mfa`; `401` credencial invalida; `429` muitas tentativas |
 | POST | `/mfa/setup` | (cookie `constantino_mfa`) | `200 { secret, otpauthUri }`; `409` ja configurado; `401` desafio expirado |
-| POST | `/mfa/verify` | `{ code }` (6 digitos) | `200 { name, email, role }` + cookie `constantino_session`; `401` codigo invalido ou reuso; `409` sem setup |
-| GET | `/me` | (cookie de sessao) | `200 { name, email, role }` |
-| POST | `/logout` | | `204` + cookies expirados |
+| POST | `/mfa/verify` | `{ code }` (6 digitos) | `200 { name, email, role }` + `Set-Cookie: CFID=<token opaco>` (8 h); `401` codigo invalido ou reuso; `409` sem setup |
+| POST | `/alive` | (cookie `CFID`) | `204`; renova a janela de inatividade de 2 h |
+| GET | `/me` | (cookie `CFID`) | `200 { name, email, role }` |
+| POST | `/logout` | (cookie `CFID`) | `204`; revoga a sessao no servidor e expira os cookies |
 
 ## Imoveis publicos (`/api/properties`)
 
@@ -111,7 +112,7 @@ Formato RFC 9457, `Content-Type: application/problem+json`:
 | Status | Quando |
 |---|---|
 | 400 | Validacao (`errors` por campo), JSON malformado, parametro invalido, `sort` desconhecido |
-| 401 | Sem sessao, credencial invalida, codigo TOTP invalido, desafio MFA expirado |
+| 401 | Sem sessao, sessao inativa por mais de 2 h ou alem de 8 h, revogada, credencial invalida, codigo TOTP invalido, desafio MFA expirado |
 | 403 | Sem CSRF ou sem papel |
 | 404 | Recurso inexistente ou nao publicado |
 | 409 | Transicao de status invalida, MFA ja/nao configurado |

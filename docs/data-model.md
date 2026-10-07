@@ -19,6 +19,21 @@ Schema gerenciado exclusivamente pelo Flyway (`src/main/resources/db/migration`)
 | mfa_last_used_step | BIGINT | ultimo passo TOTP aceito (anti-replay) |
 | created_at | TIMESTAMP(6) | UTC |
 
+### user_session
+
+| Coluna | Tipo | Observacao |
+|---|---|---|
+| id | CHAR(36) | |
+| user_id | CHAR(36) | FK `app_user`, `ON DELETE CASCADE` |
+| token_hash | CHAR(64) | SHA-256 hex do token opaco do cookie `CFID`; unico; o token em si nunca e gravado |
+| user_agent | VARCHAR(255) | auditoria |
+| created_at | TIMESTAMP(6) | |
+| last_seen_at | TIMESTAMP(6) | deslizante; sessao expira em `last_seen_at + 2 h` |
+| expires_at | TIMESTAMP(6) | limite absoluto `created_at + 8 h` |
+| revoked_at | TIMESTAMP(6) | preenchido no logout ou ao exceder 5 sessoes ativas |
+
+Indices: `uk_user_session_token_hash` (busca por request), `idx_user_session_user (user_id, revoked_at, expires_at)` para o limite por usuario, `idx_user_session_expires` para a limpeza diaria. Criada em `V2__user_session.sql`.
+
 ### property
 
 | Coluna | Tipo | Observacao |
@@ -70,4 +85,4 @@ Instantes sao gravados em UTC (`hibernate.timezone.default_storage=NORMALIZE_UTC
 
 ## Evolucao
 
-Nova mudanca de schema = novo arquivo `V<n>__<descricao>.sql`. Migration ja aplicada nunca e editada. A unica migration atual, `V1__init.sql`, pode ser ajustada apenas enquanto nao houver banco fora da maquina de desenvolvimento.
+Nova mudanca de schema = novo arquivo `V<n>__<descricao>.sql`. Migration ja aplicada nunca e editada. `V1__init.sql` (schema base) e `V2__user_session.sql` (sessoes) ja existem; qualquer ajuste entra como `V3`.

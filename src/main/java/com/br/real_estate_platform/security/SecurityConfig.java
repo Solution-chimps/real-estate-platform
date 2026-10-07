@@ -1,6 +1,7 @@
 package com.br.real_estate_platform.security;
 
 import com.br.real_estate_platform.config.AppProperties;
+import com.br.real_estate_platform.service.SessionService;
 import jakarta.servlet.DispatcherType;
 import java.util.HashMap;
 import java.util.List;
@@ -22,9 +23,9 @@ import org.springframework.security.crypto.argon2.Argon2PasswordEncoder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
+import org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -48,8 +49,7 @@ public class SecurityConfig {
 
 	@Bean
 	public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http, AppProperties properties,
-			JwtDecoder jwtDecoder, JwtAuthenticationConverter jwtAuthenticationConverter,
-			CookieBearerTokenResolver bearerTokenResolver, ProblemAuthenticationEntryPoint problemHandler,
+			SessionService sessions, SessionCookieFactory cookies, ProblemAuthenticationEntryPoint problemHandler,
 			CorsConfigurationSource corsConfigurationSource) throws Exception {
 		// The SPA never reads this cookie: it fetches a masked token from GET /api/auth/csrf and
 		// echoes it in X-XSRF-TOKEN, so the cookie can stay HttpOnly. The default
@@ -64,8 +64,17 @@ public class SecurityConfig {
 
 		http
 				.cors(cors -> cors.configurationSource(corsConfigurationSource))
-				.csrf(csrf -> csrf.csrfTokenRepository(csrfRepository))
+				// The default CsrfAuthenticationStrategy rotates the token whenever a request arrives
+				// authenticated, which with a per-request cookie session would mean on every call and
+				// would invalidate the token the SPA holds. The token is already bound to the browser
+				// by an HttpOnly SameSite=Strict cookie, so it stays stable for the cookie lifetime.
+				.csrf(csrf -> csrf
+						.csrfTokenRepository(csrfRepository)
+						.sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy()))
+				// No servlet session: the only session is the opaque CFID row resolved by this filter.
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+				.addFilterBefore(new SessionCookieAuthenticationFilter(sessions, cookies),
+						AnonymousAuthenticationFilter.class)
 				.formLogin(AbstractHttpConfigurer::disable)
 				.httpBasic(AbstractHttpConfigurer::disable)
 				.logout(AbstractHttpConfigurer::disable)
@@ -85,15 +94,8 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
 						.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 						.requestMatchers("/api/admin/**").hasRole(ADMIN_ROLE)
-						.requestMatchers("/api/auth/me").authenticated()
+						.requestMatchers("/api/auth/me", "/api/auth/alive").authenticated()
 						.anyRequest().denyAll())
-				.oauth2ResourceServer(oauth2 -> oauth2
-						.bearerTokenResolver(bearerTokenResolver)
-						.authenticationEntryPoint(problemHandler)
-						.accessDeniedHandler(problemHandler)
-						.jwt(jwt -> jwt
-								.decoder(jwtDecoder)
-								.jwtAuthenticationConverter(jwtAuthenticationConverter)))
 				.exceptionHandling(exceptions -> exceptions
 						.authenticationEntryPoint(problemHandler)
 						.accessDeniedHandler(problemHandler));

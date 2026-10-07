@@ -7,7 +7,7 @@ O backend e uma API REST stateless em Spring Boot 4.1 (Spring Framework 7, Sprin
 - **Portal publico**: consulta de imoveis publicados, bairros, fotos e registro de contato. Sem autenticacao.
 - **Backoffice**: gestao completa de imoveis, upload de fotos e leitura de contatos. Exige sessao autenticada com senha e TOTP.
 
-Nao ha estado de sessao no servidor. Tudo que identifica o usuario viaja em um JWT assinado, dentro de um cookie `HttpOnly`. Isso permite escalar horizontalmente sem replicacao de sessao e evita o `JSESSIONID`.
+Nao ha sessao de servlet (`JSESSIONID`). A sessao e uma linha em `user_session` referenciada por um token opaco no cookie `CFID` (`HttpOnly; Secure; SameSite=Strict`); o browser guarda e reenvia o cookie sozinho e o frontend nunca o toca. Qualquer no da API resolve a sessao pelo banco, entao a escala horizontal nao exige replicacao de sessao em memoria.
 
 ## Camadas
 
@@ -27,7 +27,7 @@ HTTP  ->  controller  ->  service  ->  repository  ->  banco
 | `entity` | Entidades JPA e enums de dominio | Sair do backend |
 | `dto` | Records de entrada/saida da API, com Bean Validation | Conter logica |
 | `mapper` | Conversao entity <-> dto | Acesso a banco |
-| `security` | Filter chain, JWT, cookies, TOTP, cifragem | Regra de negocio |
+| `security` | Filter chain, filtro de sessao `CFID`, JWT do desafio MFA, cookies, TOTP, cifragem | Regra de negocio |
 | `config` | `AppProperties` tipadas, `Clock`, conversores de enum, OpenAPI | |
 | `exception` | Excecoes de dominio e o `@RestControllerAdvice` | |
 | `validation` | Constraints customizadas (`@PhoneNumber`) | |
@@ -36,7 +36,7 @@ HTTP  ->  controller  ->  service  ->  repository  ->  banco
 
 1. `CorsFilter` valida a origem (apenas as de `APP_CORS_ALLOWED_ORIGINS`).
 2. `CsrfFilter` exige o header `X-XSRF-TOKEN` em metodos mutantes e confere com o cookie `XSRF-TOKEN`.
-3. `BearerTokenAuthenticationFilter` le o cookie `constantino_session` (`CookieBearerTokenResolver`), decodifica o JWT com o `sessionJwtDecoder` (assinatura HMAC, expiracao, emissor e claim `purpose=session`) e monta as autoridades a partir da claim `roles`.
+3. `SessionCookieAuthenticationFilter` le o cookie `CFID`, calcula o SHA-256 e busca a sessao ativa (`SessionService.authenticate`: nao revogada, dentro do limite absoluto e da janela de inatividade). Encontrando, desliza `last_seen_at` e autentica com `ROLE_<papel>`; nao encontrando, expira o cookie na resposta.
 4. `AuthorizationFilter` aplica as regras de `SecurityConfig`: `/api/admin/**` exige `ROLE_ADMIN`; o resto e explicitamente permitido ou negado (`anyRequest().denyAll()`).
 5. O controller valida o DTO e chama o servico.
 6. O servico abre a transacao, aplica a regra, usa o mapper e devolve um DTO.

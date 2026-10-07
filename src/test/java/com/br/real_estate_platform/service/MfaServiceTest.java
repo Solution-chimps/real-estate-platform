@@ -32,8 +32,9 @@ class MfaServiceTest {
 	@BeforeEach
 	void setUp() {
 		AppProperties properties = new AppProperties(
-				new AppProperties.Security("0123456789abcdef0123456789abcdef", Duration.ofHours(8), "session", false,
-						MAX_ATTEMPTS, Duration.ofMinutes(15), "mfa", Duration.ofMinutes(5), TEST_KEY, "Constantino"),
+				new AppProperties.Security("0123456789abcdef0123456789abcdef", "CFID", false, Duration.ofHours(8),
+						Duration.ofHours(2), 5, MAX_ATTEMPTS, Duration.ofMinutes(15), "mfa", Duration.ofMinutes(5),
+						TEST_KEY, "Constantino"),
 				new AppProperties.Cors(List.of()),
 				new AppProperties.Admin(null, null, null),
 				new AppProperties.Storage("photos"));

@@ -9,7 +9,7 @@ API REST da plataforma imobiliaria Constantino Imoveis & Patrimonio. Atende o po
 
 - Java 21, Spring Boot 4.1 (Spring Framework 7, Spring Security 7, Jackson 3)
 - Spring Data JPA + Flyway (H2 em desenvolvimento, MySQL em producao)
-- Spring Security com JWT HMAC em cookie HttpOnly, CSRF por cookie, MFA TOTP obrigatorio, Argon2id
+- Spring Security com sessao opaca em cookie `CFID` (HttpOnly, inatividade 2 h, limite 8 h, keep-alive), CSRF por cookie, MFA TOTP obrigatorio, Argon2id
 - springdoc-openapi (Swagger UI apenas no perfil `dev`)
 - Maven Wrapper
 
@@ -54,7 +54,7 @@ O frontend (`../constantino-imoveis-web`) roda em `https://localhost:4200` e des
 2. Abra `https://localhost:8443/api/properties` uma vez no navegador e aceite o certificado autoassinado.
 3. Ambos em HTTPS: os cookies de sessao sao `Secure` e `SameSite=Strict`, e `https://localhost:4200` e `https://localhost:8443` contam como o mesmo site.
 
-Fluxo verificado de ponta a ponta no perfil `dev`: `GET /api/auth/csrf` -> `POST /api/auth/login` -> `POST /api/auth/mfa/setup` -> `POST /api/auth/mfa/verify` -> `GET /api/admin/properties`.
+Fluxo verificado de ponta a ponta no perfil `dev`: `GET /api/auth/csrf` -> `POST /api/auth/login` -> `POST /api/auth/mfa/setup` -> `POST /api/auth/mfa/verify` -> `GET /api/admin/properties` -> `POST /api/auth/alive` -> `POST /api/auth/logout`.
 
 ## Perfil `mysql`
 
@@ -77,10 +77,11 @@ A suite usa o perfil `test` (H2 em memoria) com fixtures proprios em `src/test/r
 1. `GET /api/auth/csrf` recebe o cookie `XSRF-TOKEN`; toda requisicao mutante envia o valor no header `X-XSRF-TOKEN`.
 2. `POST /api/auth/login` `{ email, password }` devolve `{ mfaRequired: true, enrollmentRequired }` e o cookie de desafio `constantino_mfa` (5 minutos). Nenhuma sessao e criada nesta etapa.
 3. Primeiro acesso: `POST /api/auth/mfa/setup` devolve `{ secret, otpauthUri }` para cadastrar no aplicativo autenticador. O segredo e mostrado uma unica vez.
-4. `POST /api/auth/mfa/verify` `{ code }` valida o TOTP, troca o desafio pela sessao (`constantino_session`, 8 horas) e devolve o usuario.
-5. `GET /api/auth/me` e `POST /api/auth/logout`.
+4. `POST /api/auth/mfa/verify` `{ code }` valida o TOTP, abre a sessao no servidor e devolve o usuario. A resposta traz `Set-Cookie: CFID=<token opaco>` (8 horas); o browser guarda e reenvia o cookie sozinho, o frontend nunca o le.
+5. A sessao expira apos 2 horas sem requisicoes ou 8 horas em qualquer caso. `POST /api/auth/alive` renova a janela de inatividade (o painel chama a cada 5 minutos).
+6. `GET /api/auth/me` devolve o usuario da sessao; `POST /api/auth/logout` revoga a sessao no servidor e expira o cookie.
 
-Todos os cookies sao `HttpOnly; Secure; SameSite=Strict; Path=/api`.
+Todos os cookies sao `HttpOnly; Secure; SameSite=Strict; Path=/api`. Detalhes em `docs/security.md`.
 
 ## Endpoints
 

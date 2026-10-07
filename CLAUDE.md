@@ -130,12 +130,12 @@ Formato: uma ou duas linhas acima do trecho, em ingles, comecando pelo motivo.
 
 ### 8.1 Autenticacao e sessao
 
-- Stateless. `SessionCreationPolicy.STATELESS`; nao existe `JSESSIONID`.
-- Login em duas etapas obrigatorias: senha (`POST /api/auth/login`) emite apenas um desafio curto (cookie `constantino_mfa`, 5 minutos, claim `purpose=mfa`, sem papel). A sessao real (cookie `constantino_session`, claim `purpose=session`) so nasce em `POST /api/auth/mfa/verify` com codigo TOTP valido. O decoder do resource server rejeita qualquer token cujo `purpose` nao seja `session`.
+- Sem sessao de servlet: `SessionCreationPolicy.STATELESS`, nao existe `JSESSIONID`. A sessao da API e uma linha em `user_session` apontada pelo cookie opaco `CFID` (token aleatorio de 256 bits; so o SHA-256 e gravado). Inatividade de 2 h (`session-idle-timeout`), limite absoluto de 8 h (`session-absolute-ttl`), no maximo 5 sessoes por usuario, revogacao no logout, keep-alive em `POST /api/auth/alive`. Resolucao em `security/SessionCookieAuthenticationFilter.java` + `service/SessionService.java`. Nunca reintroduza JWT de sessao nem token legivel pelo frontend.
+- Login em duas etapas obrigatorias: senha (`POST /api/auth/login`) emite apenas um desafio curto (cookie `constantino_mfa`, JWT de 5 minutos, claim `purpose=mfa`, sem papel), aceito so por `/api/auth/mfa/*`. A sessao `CFID` so nasce em `POST /api/auth/mfa/verify` com codigo TOTP valido.
 - MFA e via aplicativo autenticador (TOTP RFC 6238, SHA-1, 6 digitos, 30 s, janela de 1 passo). Proibido SMS ou e-mail como segundo fator. Primeiro login exige enrolamento em `/api/auth/mfa/setup`.
 - Anti-replay: o ultimo passo TOTP aceito e persistido (`mfa_last_used_step`); codigo de passo igual ou anterior e recusado.
 - Todo cookie emitido pela API e `HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/api`. `cookie-secure` so e `false` no perfil de teste.
-- JWT assinado com HMAC-SHA256 pelo `JwtEncoder` do Spring Security (Nimbus). Segredo com no minimo 32 caracteres, vindo de `APP_JWT_SECRET`. Nao adicione biblioteca de JWT.
+- O unico JWT do sistema e o desafio MFA, assinado com HMAC-SHA256 pelo `JwtEncoder` do Spring Security (Nimbus). Segredo com no minimo 32 caracteres, vindo de `APP_JWT_SECRET`. Nao adicione biblioteca de JWT.
 - Limite de tentativas por conta para senha e para TOTP (`LoginAttemptService`). Resposta `429` quando excedido.
 
 ### 8.2 Senhas e segredos

@@ -46,7 +46,10 @@ O frontend em `ng serve --ssl` e a API em `https://localhost:8443` sao *same-sit
 | `spring.servlet.multipart.max-file-size` | `10MB` | Limite de foto |
 | `spring.data.web.pageable.max-page-size` | `100` | Protege contra listagens gigantes |
 | `server.error.include-*` | `never` | Nenhum detalhe interno em erro |
-| `app.security.token-ttl` | `PT8H` | Jornada de trabalho |
+| `app.security.cookie-name` | `CFID` | Nome do cookie de sessao opaco |
+| `app.security.session-absolute-ttl` | `PT8H` | Limite absoluto da sessao (jornada de trabalho) |
+| `app.security.session-idle-timeout` | `PT2H` | Inatividade maxima; o SPA renova com `/api/auth/alive` |
+| `app.security.max-sessions-per-user` | `5` | Sessoes ativas simultaneas por usuario |
 | `app.security.mfa-challenge-ttl` | `PT5M` | Tempo para abrir o autenticador |
 | `app.security.max-login-attempts` / `login-lock-duration` | `5` / `PT15M` | Freio a forca bruta |
 

@@ -21,9 +21,11 @@ public record AppProperties(
 
 	public record Security(
 			@NotBlank @Size(min = 32) String jwtSecret,
-			@NotNull Duration tokenTtl,
 			@NotBlank String cookieName,
 			boolean cookieSecure,
+			@NotNull Duration sessionAbsoluteTtl,
+			@NotNull Duration sessionIdleTimeout,
+			@Min(1) int maxSessionsPerUser,
 			@Min(1) int maxLoginAttempts,
 			@NotNull Duration loginLockDuration,
 			@NotBlank String mfaCookieName,

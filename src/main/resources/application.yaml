@@ -50,9 +50,11 @@ springdoc:
 app:
   security:
     jwt-secret: ${APP_JWT_SECRET:}
-    token-ttl: PT8H
-    cookie-name: constantino_session
+    cookie-name: CFID
     cookie-secure: true
+    session-absolute-ttl: PT8H
+    session-idle-timeout: PT2H
+    max-sessions-per-user: 5
     max-login-attempts: 5
     login-lock-duration: PT15M
     mfa-cookie-name: constantino_mfa

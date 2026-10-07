@@ -10,6 +10,7 @@ import com.br.real_estate_platform.dto.SessionResult;
 import com.br.real_estate_platform.dto.UserResponse;
 import com.br.real_estate_platform.exception.MfaChallengeExpiredException;
 import com.br.real_estate_platform.security.SessionCookieFactory;
+import com.br.real_estate_platform.security.SessionPrincipal;
 import com.br.real_estate_platform.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -17,7 +18,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -46,18 +46,28 @@ public class AuthController {
 		return authService.setupMfa(challengeFrom(request));
 	}
 
+	// The CFID cookie set here is the only credential the API accepts; the client never
+	// reads it, the browser stores and replays it on its own.
 	@PostMapping("/mfa/verify")
 	public ResponseEntity<UserResponse> verifyMfa(@Valid @RequestBody MfaVerifyRequest body,
 			HttpServletRequest request) {
-		SessionResult session = authService.verifyMfa(challengeFrom(request), body.code());
+		SessionResult session = authService.verifyMfa(challengeFrom(request), body.code(),
+				request.getHeader(HttpHeaders.USER_AGENT));
 		return ResponseEntity.ok()
 				.header(HttpHeaders.SET_COOKIE, cookies.session(session.token()).toString())
 				.header(HttpHeaders.SET_COOKIE, cookies.expiredMfaChallenge().toString())
 				.body(session.user());
 	}
 
+	@PostMapping("/alive")
+	public ResponseEntity<Void> keepAlive(HttpServletRequest request) {
+		cookies.readSession(request).ifPresent(authService::keepAlive);
+		return ResponseEntity.noContent().build();
+	}
+
 	@PostMapping("/logout")
-	public ResponseEntity<Void> logout() {
+	public ResponseEntity<Void> logout(HttpServletRequest request) {
+		cookies.readSession(request).ifPresent(authService::logout);
 		return ResponseEntity.noContent()
 				.header(HttpHeaders.SET_COOKIE, cookies.expiredSession().toString())
 				.header(HttpHeaders.SET_COOKIE, cookies.expiredMfaChallenge().toString())
@@ -65,8 +75,8 @@ public class AuthController {
 	}
 
 	@GetMapping("/me")
-	public UserResponse me(@AuthenticationPrincipal Jwt jwt) {
-		return authService.currentUser(jwt.getSubject());
+	public UserResponse me(@AuthenticationPrincipal SessionPrincipal principal) {
+		return authService.currentUser(principal);
 	}
 
 	// Reading the token materialises the XSRF-TOKEN cookie on this response and returns the

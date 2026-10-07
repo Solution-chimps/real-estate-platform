@@ -9,7 +9,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
 
 // Every cookie issued by the API is HttpOnly, Secure and SameSite=Strict; there is no
-// servlet session, so no JSESSIONID exists.
+// servlet session, so no JSESSIONID exists. The browser is the only party that handles them.
 @Component
 public class SessionCookieFactory {
 
@@ -22,7 +22,7 @@ public class SessionCookieFactory {
 	}
 
 	public ResponseCookie session(String token) {
-		return build(security.cookieName(), token, security.tokenTtl());
+		return build(security.cookieName(), token, security.sessionAbsoluteTtl());
 	}
 
 	public ResponseCookie expiredSession() {
@@ -37,13 +37,21 @@ public class SessionCookieFactory {
 		return build(security.mfaCookieName(), "", Duration.ZERO);
 	}
 
+	public Optional<String> readSession(HttpServletRequest request) {
+		return read(request, security.cookieName());
+	}
+
 	public Optional<String> readMfaChallenge(HttpServletRequest request) {
+		return read(request, security.mfaCookieName());
+	}
+
+	private static Optional<String> read(HttpServletRequest request, String name) {
 		Cookie[] cookies = request.getCookies();
 		if (cookies == null) {
 			return Optional.empty();
 		}
 		for (Cookie cookie : cookies) {
-			if (security.mfaCookieName().equals(cookie.getName()) && !cookie.getValue().isBlank()) {
+			if (name.equals(cookie.getName()) && !cookie.getValue().isBlank()) {
 				return Optional.of(cookie.getValue());
 			}
 		}

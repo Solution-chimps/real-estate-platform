@@ -8,7 +8,6 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Primary;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
@@ -21,13 +20,10 @@ import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 
+// JWT is used only for the short-lived MFA challenge; API sessions are opaque CFID tokens.
 @Configuration
 public class JwtConfig {
-
-	private static final String ROLE_PREFIX = "ROLE_";
 
 	@Bean
 	public SecretKey jwtSecretKey(AppProperties properties) {
@@ -39,34 +35,13 @@ public class JwtConfig {
 		return new NimbusJwtEncoder(new ImmutableSecret<>(jwtSecretKey));
 	}
 
-	// Only fully authenticated (password + TOTP) tokens may reach the API.
 	@Bean
-	@Primary
-	public JwtDecoder sessionJwtDecoder(SecretKey jwtSecretKey) {
-		return decoderFor(jwtSecretKey, TokenService.SESSION_PURPOSE);
-	}
-
-	@Bean(TokenService.MFA_CHALLENGE_DECODER)
 	public JwtDecoder mfaChallengeJwtDecoder(SecretKey jwtSecretKey) {
-		return decoderFor(jwtSecretKey, TokenService.MFA_CHALLENGE_PURPOSE);
-	}
-
-	@Bean
-	public JwtAuthenticationConverter jwtAuthenticationConverter() {
-		JwtGrantedAuthoritiesConverter authorities = new JwtGrantedAuthoritiesConverter();
-		authorities.setAuthoritiesClaimName(TokenService.ROLES_CLAIM);
-		authorities.setAuthorityPrefix(ROLE_PREFIX);
-		JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-		converter.setJwtGrantedAuthoritiesConverter(authorities);
-		return converter;
-	}
-
-	private static JwtDecoder decoderFor(SecretKey key, String purpose) {
-		NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
+		NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(jwtSecretKey).macAlgorithm(MacAlgorithm.HS256).build();
 		decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
 				new JwtTimestampValidator(),
 				new JwtIssuerValidator(TokenService.ISSUER),
-				purposeValidator(purpose)));
+				purposeValidator(TokenService.MFA_CHALLENGE_PURPOSE)));
 		return decoder;
 	}
 

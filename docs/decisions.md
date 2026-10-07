@@ -2,21 +2,21 @@
 
 Registro das escolhas que nao sao obvias pelo codigo, com as alternativas consideradas.
 
-## 1. Sessao em JWT dentro de cookie HttpOnly, sem sessao de servidor
+## 1. Sessao opaca no servidor (cookie `CFID`), sem JWT de sessao
 
-**Decisao**: a API e stateless; o JWT assinado viaja em `constantino_session` (`HttpOnly; Secure; SameSite=Strict`).
+**Decisao**: a sessao e uma linha em `user_session`; o cookie `CFID` (`HttpOnly; Secure; SameSite=Strict`) carrega um token aleatorio de 256 bits cujo SHA-256 e a chave da linha. Inatividade de 2 h, limite absoluto de 8 h, keep-alive em `/api/auth/alive`, revogacao no logout, 5 sessoes por usuario.
 
-**Alternativas**: sessao HTTP com `JSESSIONID` (exige afinidade ou replicacao de sessao); token Bearer guardado pelo SPA (fica exposto a XSS e as regras do frontend proibem `localStorage`).
+**Alternativas**: JWT assinado em cookie (stateless, mas sem revogacao e sem inatividade real; foi a primeira versao); sessao HTTP do servlet com `JSESSIONID` (acopla ao container e a replicacao de sessao); token Bearer guardado pelo SPA (exposto a XSS, proibido pelas regras do frontend).
 
-**Por que**: cookie `HttpOnly` tira o token do alcance de script; stateless simplifica escala e deploy. O custo e nao ter revogacao imediata, aceito para um token de 8 h e documentado em `security.md`.
+**Por que**: o padrao da empresa exige token opaco com ciclo de vida controlado pelo servidor e renovado por keep-alive. Com a sessao no banco, logout e bloqueio revogam de imediato, inatividade e limite absoluto sao aplicados com precisao e o token nao carrega nada que valha a pena decodificar. O custo e uma consulta indexada por requisicao autenticada, aceitavel para o volume do backoffice. O frontend nao sabe que o cookie existe: so o browser o guarda e reenvia.
 
-## 2. Login em duas etapas com dois tipos de token
+## 2. Login em duas etapas: desafio JWT curto, sessao opaca depois
 
-**Decisao**: a senha gera apenas um desafio (`purpose=mfa`, 5 min, sem papeis). A sessao nasce no `mfa/verify`.
+**Decisao**: a senha gera apenas um desafio JWT (`purpose=mfa`, 5 min, sem papeis) no cookie `constantino_mfa`. A sessao `CFID` nasce no `mfa/verify`.
 
-**Alternativa**: emitir a sessao na senha e marcar uma flag "MFA pendente" verificada por filtro.
+**Alternativa**: abrir a sessao na senha e marcar uma flag "MFA pendente" verificada por filtro; ou gravar o desafio no banco.
 
-**Por que**: com dois decoders e a claim `purpose`, um token de desafio nunca e aceito pelo resource server, por construcao e nao por checagem adicional em cada endpoint. O enrolamento obrigatorio tambem fica natural: `setup` so aceita o desafio.
+**Por que**: um JWT assinado resolve o desafio sem gravar nada antes de a autenticacao estar completa. O filtro de sessao so aceita tokens presentes em `user_session`, entao um desafio apresentado como `CFID` falha a busca por hash por construcao, nao por checagem adicional em cada endpoint. O enrolamento obrigatorio fica natural: `setup` so aceita o desafio.
 
 ## 3. TOTP implementado no projeto
 

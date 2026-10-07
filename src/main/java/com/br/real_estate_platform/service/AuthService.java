@@ -1,5 +1,6 @@
 package com.br.real_estate_platform.service;
 
+import com.br.real_estate_platform.dto.IssuedSession;
 import com.br.real_estate_platform.dto.LoginRequest;
 import com.br.real_estate_platform.dto.LoginResponse;
 import com.br.real_estate_platform.dto.LoginResult;
@@ -8,8 +9,8 @@ import com.br.real_estate_platform.dto.SessionResult;
 import com.br.real_estate_platform.dto.UserResponse;
 import com.br.real_estate_platform.entity.AppUser;
 import com.br.real_estate_platform.exception.MfaChallengeExpiredException;
-import com.br.real_estate_platform.exception.ResourceNotFoundException;
 import com.br.real_estate_platform.repository.AppUserRepository;
+import com.br.real_estate_platform.security.SessionPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -27,6 +28,7 @@ public class AuthService {
 	private final TokenService tokenService;
 	private final LoginAttemptService loginAttempts;
 	private final MfaService mfaService;
+	private final SessionService sessions;
 
 	// Step one of the login: the password alone never yields an API session, only a
 	// short-lived challenge that the TOTP step exchanges for the real cookie.
@@ -53,16 +55,25 @@ public class AuthService {
 	}
 
 	@Transactional
-	public SessionResult verifyMfa(String challengeToken, String code) {
+	public SessionResult verifyMfa(String challengeToken, String code, String userAgent) {
 		AppUser user = userFromChallenge(challengeToken);
 		mfaService.verify(user, code);
-		return new SessionResult(tokenService.issueSession(user), toResponse(user));
+		IssuedSession session = sessions.open(user, userAgent);
+		return new SessionResult(session.token(), toResponse(user));
 	}
 
-	public UserResponse currentUser(String email) {
-		return userRepository.findByEmailIgnoreCase(email)
-				.map(AuthService::toResponse)
-				.orElseThrow(() -> new ResourceNotFoundException("Usuário não encontrado"));
+	@Transactional
+	public void logout(String sessionToken) {
+		sessions.revoke(sessionToken);
+	}
+
+	@Transactional
+	public void keepAlive(String sessionToken) {
+		sessions.touch(sessionToken);
+	}
+
+	public UserResponse currentUser(SessionPrincipal principal) {
+		return new UserResponse(principal.name(), principal.email(), principal.role());
 	}
 
 	private AppUser userFromChallenge(String challengeToken) {
