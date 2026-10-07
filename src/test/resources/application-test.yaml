@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:real_estate_test;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+
+server:
+  ssl:
+    enabled: false
+
+app:
+  security:
+    # Test-only fixtures; never reused outside the automated suite.
+    jwt-secret: test-only-secret-for-the-automated-suite-0123456789abcdef
+    mfa-encryption-key: dGVzdC1vbmx5LW1mYS1rZXktMzItYnl0ZXMtMDEyMzQ=
+    cookie-secure: false
+  storage:
+    photos-dir: ${java.io.tmpdir}/real-estate-platform-test-photos

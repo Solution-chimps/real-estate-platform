@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: ${APP_DB_URL:jdbc:mysql://localhost:3306/real_estate?sslMode=PREFERRED&serverTimezone=UTC}
+    username: ${APP_DB_USERNAME}
+    password: ${APP_DB_PASSWORD}
+  flyway:
+    placeholders:
+      timestampType: DATETIME(6)
+  docker:
+    compose:
+      enabled: ${APP_DOCKER_COMPOSE:true}
