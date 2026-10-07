@@ -9,6 +9,8 @@ server:
     enabled: false
 
 app:
+  cors:
+    allowed-origins: https://localhost:4200
   security:
     # Test-only fixtures; never reused outside the automated suite.
     jwt-secret: test-only-secret-for-the-automated-suite-0123456789abcdef

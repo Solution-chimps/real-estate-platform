@@ -8,7 +8,6 @@ A especificacao OpenAPI gerada pelo springdoc fica em `/v3/api-docs` e o Swagger
 
 | Metodo | Caminho | Corpo | Resposta |
 |---|---|---|---|
-| GET | `/csrf` | | `200 { headerName, token }` + cookie `XSRF-TOKEN` |
 | POST | `/login` | `{ email, password }` | `200 { mfaRequired: true, enrollmentRequired }` + cookie `constantino_mfa`; `401` credencial invalida; `429` muitas tentativas |
 | POST | `/mfa/setup` | (cookie `constantino_mfa`) | `200 { secret, otpauthUri }`; `409` ja configurado; `401` desafio expirado |
 | POST | `/mfa/verify` | `{ code }` (6 digitos) | `200 { name, email, role }` + `Set-Cookie: CFID=<token opaco>` (8 h); `401` codigo invalido ou reuso; `409` sem setup |
@@ -113,7 +112,7 @@ Formato RFC 9457, `Content-Type: application/problem+json`:
 |---|---|
 | 400 | Validacao (`errors` por campo), JSON malformado, parametro invalido, `sort` desconhecido |
 | 401 | Sem sessao, sessao inativa por mais de 2 h ou alem de 8 h, revogada, credencial invalida, codigo TOTP invalido, desafio MFA expirado |
-| 403 | Sem CSRF ou sem papel |
+| 403 | `Origin`/`Referer` ausente ou nao permitido em requisicao mutante, ou sem papel |
 | 404 | Recurso inexistente ou nao publicado |
 | 409 | Transicao de status invalida, MFA ja/nao configurado |
 | 413 | Upload acima do limite |

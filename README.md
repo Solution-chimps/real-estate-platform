@@ -9,7 +9,7 @@ API REST da plataforma imobiliaria Constantino Imoveis & Patrimonio. Atende o po
 
 - Java 21, Spring Boot 4.1 (Spring Framework 7, Spring Security 7, Jackson 3)
 - Spring Data JPA + Flyway (H2 em desenvolvimento, MySQL em producao)
-- Spring Security com sessao opaca em cookie `CFID` (HttpOnly, inatividade 2 h, limite 8 h, keep-alive), CSRF por cookie, MFA TOTP obrigatorio, Argon2id
+- Spring Security com sessao opaca em cookie `CFID` (HttpOnly, inatividade 2 h, limite 8 h, keep-alive), CSRF por `SameSite=Strict` + verificacao de `Origin` (sem token no cliente), MFA TOTP obrigatorio, Argon2id
 - springdoc-openapi (Swagger UI apenas no perfil `dev`)
 - Maven Wrapper
 
@@ -54,7 +54,7 @@ O frontend (`../constantino-imoveis-web`) roda em `https://localhost:4200` e des
 2. Abra `https://localhost:8443/api/properties` uma vez no navegador e aceite o certificado autoassinado.
 3. Ambos em HTTPS: os cookies de sessao sao `Secure` e `SameSite=Strict`, e `https://localhost:4200` e `https://localhost:8443` contam como o mesmo site.
 
-Fluxo verificado de ponta a ponta no perfil `dev`: `GET /api/auth/csrf` -> `POST /api/auth/login` -> `POST /api/auth/mfa/setup` -> `POST /api/auth/mfa/verify` -> `GET /api/admin/properties` -> `POST /api/auth/alive` -> `POST /api/auth/logout`.
+Fluxo verificado de ponta a ponta no perfil `dev`: `POST /api/auth/login` -> `POST /api/auth/mfa/setup` -> `POST /api/auth/mfa/verify` -> `GET /api/admin/properties` -> `POST /api/auth/alive` -> `POST /api/auth/logout`.
 
 ## Perfil `mysql`
 
@@ -74,14 +74,13 @@ A suite usa o perfil `test` (H2 em memoria) com fixtures proprios em `src/test/r
 
 ## Fluxo de autenticacao
 
-1. `GET /api/auth/csrf` recebe o cookie `XSRF-TOKEN`; toda requisicao mutante envia o valor no header `X-XSRF-TOKEN`.
-2. `POST /api/auth/login` `{ email, password }` devolve `{ mfaRequired: true, enrollmentRequired }` e o cookie de desafio `constantino_mfa` (5 minutos). Nenhuma sessao e criada nesta etapa.
-3. Primeiro acesso: `POST /api/auth/mfa/setup` devolve `{ secret, otpauthUri }` para cadastrar no aplicativo autenticador. O segredo e mostrado uma unica vez.
-4. `POST /api/auth/mfa/verify` `{ code }` valida o TOTP, abre a sessao no servidor e devolve o usuario. A resposta traz `Set-Cookie: CFID=<token opaco>` (8 horas); o browser guarda e reenvia o cookie sozinho, o frontend nunca o le.
-5. A sessao expira apos 2 horas sem requisicoes ou 8 horas em qualquer caso. `POST /api/auth/alive` renova a janela de inatividade (o painel chama a cada 5 minutos).
-6. `GET /api/auth/me` devolve o usuario da sessao; `POST /api/auth/logout` revoga a sessao no servidor e expira o cookie.
+1. `POST /api/auth/login` `{ email, password }` devolve `{ mfaRequired: true, enrollmentRequired }` e o cookie de desafio `constantino_mfa` (5 minutos). Nenhuma sessao e criada nesta etapa.
+2. Primeiro acesso: `POST /api/auth/mfa/setup` devolve `{ secret, otpauthUri }` para cadastrar no aplicativo autenticador. O segredo e mostrado uma unica vez.
+3. `POST /api/auth/mfa/verify` `{ code }` valida o TOTP, abre a sessao no servidor e devolve o usuario. A resposta traz `Set-Cookie: CFID=<token opaco>` (8 horas); o browser guarda e reenvia o cookie sozinho, o frontend nunca o le.
+4. A sessao expira apos 2 horas sem requisicoes ou 8 horas em qualquer caso. `POST /api/auth/alive` renova a janela de inatividade (o painel chama a cada 5 minutos).
+5. `GET /api/auth/me` devolve o usuario da sessao; `POST /api/auth/logout` revoga a sessao no servidor e expira o cookie.
 
-Todos os cookies sao `HttpOnly; Secure; SameSite=Strict; Path=/api`. Detalhes em `docs/security.md`.
+Todos os cookies sao `HttpOnly; Secure; SameSite=Strict; Path=/api`. Nao ha token CSRF: requisicoes mutantes precisam de um header `Origin` (ou `Referer`) igual a origem da API ou a uma de `APP_CORS_ALLOWED_ORIGINS`, que o browser envia sozinho. Detalhes em `docs/security.md`.
 
 ## Sessao `CFID` e keep-alive
 
@@ -101,7 +100,6 @@ Todos os cookies sao `HttpOnly; Secure; SameSite=Strict; Path=/api`. Detalhes em
 
 | Metodo | Caminho | Acesso | Descricao |
 |---|---|---|---|
-| GET | `/api/auth/csrf` | publico | Emite o cookie `XSRF-TOKEN` e devolve `{ headerName, token }` para o header `X-XSRF-TOKEN` |
 | POST | `/api/auth/login` | publico | `{ email, password }`; devolve `{ mfaRequired, enrollmentRequired }` e o cookie de desafio `constantino_mfa` (5 min) |
 | POST | `/api/auth/mfa/setup` | desafio MFA | Primeiro acesso: devolve `{ secret, otpauthUri }` do autenticador (exibido uma unica vez) |
 | POST | `/api/auth/mfa/verify` | desafio MFA | `{ code }` TOTP; abre a sessao e responde com `Set-Cookie: CFID=<token opaco>` (8 h) |

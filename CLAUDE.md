@@ -149,9 +149,9 @@ Formato: uma ou duas linhas acima do trecho, em ingles, comecando pelo motivo.
 ### 8.3 Transporte e navegador
 
 - HTTPS em todos os perfis, inclusive `dev` (`server.ssl.*` com keystore local gerado por `scripts/generate-dev-cert`). Nenhuma URL `http://` em codigo ou configuracao.
-- CSRF ativo com `CookieCsrfTokenRepository` (cookie `XSRF-TOKEN` legivel pelo SPA, header `X-XSRF-TOKEN`) e `SpaCsrfTokenRequestHandler`. Nao desabilite CSRF fora da chain do console H2 em `dev`.
+- Protecao CSRF sem token: `SameSite=Strict` em todo cookie e `security/OriginVerificationFilter.java` exigindo `Origin`/`Referer` permitido em `POST/PUT/PATCH/DELETE`. Nao reintroduza token sincronizador nem header que o frontend precise enviar: toda credencial vive em cookie emitido pelo servidor. Origem nova do frontend entra em `APP_CORS_ALLOWED_ORIGINS`, que alimenta CORS e a verificacao de origem.
 - Headers: HSTS, `X-Frame-Options: DENY`, CSP `default-src 'none'`, `X-Content-Type-Options: nosniff` (padrao do Spring Security). Nao relaxe sem justificativa escrita.
-- CORS permite apenas origens de `APP_CORS_ALLOWED_ORIGINS`, com credenciais. Nunca `*`.
+- CORS permite apenas origens de `APP_CORS_ALLOWED_ORIGINS`, com credenciais. Nunca `*`. A mesma lista e usada pela verificacao de origem.
 - `anyRequest().denyAll()`. Endpoint novo precisa de regra explicita em `SecurityConfig`.
 
 ### 8.4 Upload
@@ -175,7 +175,7 @@ Escreva teste para: autorizacao e regras da `SecurityFilterChain`; fluxo de aute
 Nao escreva teste para: `contextLoads`, getter/setter, record, mapeamento trivial, comportamento do Spring ou de biblioteca.
 
 - Integracao com `@SpringBootTest` + `@AutoConfigureMockMvc` + `@ActiveProfiles("test")`. Perfil `test` usa H2 em memoria e os fixtures de `application-test.yaml`.
-- Requisicao mutante em teste usa `.with(csrf())`. Nao desabilite CSRF para testar.
+- Requisicao mutante em teste envia `Origin` permitido (`https://localhost:4200` no perfil `test`). Nao relaxe o `OriginVerificationFilter` para testar.
 - Tempo controlado por `Clock` injetado; nunca `Thread.sleep`.
 - Teste nao acessa rede nem disco fora de `java.io.tmpdir`.
 

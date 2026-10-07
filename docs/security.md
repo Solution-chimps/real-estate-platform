@@ -8,6 +8,7 @@
 | MFA obrigatorio, resistente a SIM swap | TOTP (RFC 6238) por aplicativo autenticador; nenhum SMS ou e-mail |
 | Sessao opaca gerenciada pelo servidor | Cookie `CFID` com token aleatorio de 256 bits; so o hash SHA-256 fica no banco; inatividade 2 h, limite absoluto 8 h, revogacao real |
 | Cookies seguros | Todos `HttpOnly; Secure; SameSite=Strict; Path=/api`; sem `JSESSIONID`; o frontend nunca le nem manipula cookie |
+| CSRF sem token no cliente | `SameSite=Strict` + verificacao de `Origin`/`Referer` em `POST/PUT/PATCH/DELETE`; nenhum header ou cookie legivel no front |
 | Segredos fora do codigo | `APP_JWT_SECRET`, `APP_MFA_ENCRYPTION_KEY`, senha do admin e do keystore apenas por variavel de ambiente |
 | TLS em todos os ambientes | `server.ssl.*` ligado por padrao, inclusive em `dev` |
 
@@ -15,7 +16,6 @@
 
 ```
 SPA                                   API
- |-- GET /api/auth/csrf -------------->|  cookie XSRF-TOKEN (HttpOnly) + { headerName, token }
  |-- POST /api/auth/login ------------>|  Argon2id verify, limite de tentativas
  |<-- { mfaRequired, enrollmentRequired } + cookie constantino_mfa (JWT, 5 min, purpose=mfa)
  |-- POST /api/auth/mfa/setup -------->|  (so no primeiro acesso) gera seed, cifra, devolve { secret, otpauthUri }
@@ -64,11 +64,12 @@ Cifrado com AES-256-GCM (`security/SecretEncryptor.java`): nonce aleatorio de 12
 
 ## CSRF
 
-Cookies `SameSite=Strict` ja bloqueiam a maior parte dos ataques CSRF, mas o token sincronizador continua ativo como segunda camada:
+A regra do produto e que o cliente nao manipule token algum, entao nao existe token sincronizador (`csrf().disable()`). A protecao contra requisicoes forjadas por outro site tem duas camadas, ambas no servidor e no browser:
 
-- `CookieCsrfTokenRepository` com cookie `XSRF-TOKEN` **HttpOnly**. O SPA chama `GET /api/auth/csrf`, que devolve o token mascarado (`XorCsrfTokenRequestAttributeHandler`, protecao BREACH) e o nome do header.
-- Toda requisicao `POST/PUT/PATCH/DELETE` precisa do header `X-XSRF-TOKEN`.
-- O token **nao e rotacionado no login**: com a sessao resolvida a cada requisicao, a `CsrfAuthenticationStrategy` padrao do Spring trocaria o token em toda chamada autenticada e invalidaria o header que o SPA guarda. O token ja esta vinculado ao browser pelo cookie `HttpOnly; SameSite=Strict`, entao permanece estavel ate o cookie expirar (`NullAuthenticatedSessionStrategy` em `SecurityConfig`). O teste `csrfTokenObtainedBeforeLoginKeepsWorkingAfterTheSessionIsOpened` cobre o fluxo real.
+1. **`SameSite=Strict`** em todos os cookies: o browser nao anexa o `CFID` a nenhuma requisicao iniciada a partir de outro site, nem mesmo por navegacao de link.
+2. **Verificacao de origem** (`security/OriginVerificationFilter.java`): em `POST/PUT/PATCH/DELETE` o header `Origin` (ou, na falta dele, `Referer`) precisa ser a propria origem da API ou uma das origens de `APP_CORS_ALLOWED_ORIGINS`. Requisicao sem os dois headers, com `Origin: null` ou de origem desconhecida recebe `403`, mesmo com sessao valida. Metodos seguros (`GET`, `HEAD`, `OPTIONS`) nao sao verificados. O browser preenche esses headers sozinho e uma pagina nao consegue altera-los, por isso o padrao e aceito pela OWASP como defesa CSRF sem token.
+
+Clientes nao navegador (scripts, Postman) precisam enviar um `Origin` permitido nas chamadas mutantes.
 
 ## Cabecalhos de resposta
 
@@ -79,7 +80,7 @@ Cookies `SameSite=Strict` ja bloqueiam a maior parte dos ataques CSRF, mas o tok
 
 ## CORS
 
-Apenas as origens de `APP_CORS_ALLOWED_ORIGINS`, com credenciais, metodos `GET, POST, PUT, PATCH, DELETE, OPTIONS` e headers `Content-Type, Accept, X-XSRF-TOKEN`. Nunca `*`.
+Apenas as origens de `APP_CORS_ALLOWED_ORIGINS`, com credenciais, metodos `GET, POST, PUT, PATCH, DELETE, OPTIONS` e headers `Content-Type, Accept`. Nunca `*`.
 
 ## Autorizacao
 

@@ -35,7 +35,7 @@ HTTP  ->  controller  ->  service  ->  repository  ->  banco
 ## Fluxo de uma requisicao administrativa
 
 1. `CorsFilter` valida a origem (apenas as de `APP_CORS_ALLOWED_ORIGINS`).
-2. `CsrfFilter` exige o header `X-XSRF-TOKEN` em metodos mutantes e confere com o cookie `XSRF-TOKEN`.
+2. `OriginVerificationFilter` exige, em metodos mutantes, um `Origin` (ou `Referer`) igual a origem da API ou a uma origem permitida; sem isso responde `403`.
 3. `SessionCookieAuthenticationFilter` le o cookie `CFID`, calcula o SHA-256 e busca a sessao ativa (`SessionService.authenticate`: nao revogada, dentro do limite absoluto e da janela de inatividade). Encontrando, desliza `last_seen_at` e autentica com `ROLE_<papel>`; nao encontrando, expira o cookie na resposta.
 4. `AuthorizationFilter` aplica as regras de `SecurityConfig`: `/api/admin/**` exige `ROLE_ADMIN`; o resto e explicitamente permitido ou negado (`anyRequest().denyAll()`).
 5. O controller valida o DTO e chama o servico.

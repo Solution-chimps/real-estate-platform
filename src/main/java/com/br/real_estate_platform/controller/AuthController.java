@@ -1,6 +1,5 @@
 package com.br.real_estate_platform.controller;
 
-import com.br.real_estate_platform.dto.CsrfTokenResponse;
 import com.br.real_estate_platform.dto.LoginRequest;
 import com.br.real_estate_platform.dto.LoginResponse;
 import com.br.real_estate_platform.dto.LoginResult;
@@ -18,7 +17,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -77,13 +75,6 @@ public class AuthController {
 	@GetMapping("/me")
 	public UserResponse me(@AuthenticationPrincipal SessionPrincipal principal) {
 		return authService.currentUser(principal);
-	}
-
-	// Reading the token materialises the XSRF-TOKEN cookie on this response and returns the
-	// masked value the SPA must send back in the header named here.
-	@GetMapping("/csrf")
-	public CsrfTokenResponse csrf(CsrfToken csrfToken) {
-		return new CsrfTokenResponse(csrfToken.getHeaderName(), csrfToken.getToken());
 	}
 
 	private String challengeFrom(HttpServletRequest request) {

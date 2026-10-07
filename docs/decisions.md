@@ -40,13 +40,13 @@ Registro das escolhas que nao sao obvias pelo codigo, com as alternativas consid
 
 **Por que**: um dump do banco com seeds em claro permite gerar codigos validos para qualquer conta. Com a chave fora do banco, o dump sozinho nao basta.
 
-## 6. CSRF com token no corpo da resposta e cookie HttpOnly
+## 6. CSRF sem token: SameSite=Strict + verificacao de Origin
 
-**Decisao**: `GET /api/auth/csrf` devolve `{ headerName, token }`; cookie `XSRF-TOKEN` e `HttpOnly`.
+**Decisao**: `csrf().disable()` e `OriginVerificationFilter` em metodos mutantes; nenhum token, header ou cookie legivel no cliente.
 
-**Alternativa**: padrao Angular `withXsrfConfiguration` lendo o cookie via `document.cookie`.
+**Alternativas**: token sincronizador no cookie `XSRF-TOKEN` lido pelo Angular (exige cookie legivel por script e mesma origem); token mascarado devolvido pela API e enviado em header (primeira versao, exigia codigo no front e esbarrou na rotacao por requisicao da sessao stateless).
 
-**Por que**: o frontend descobre o host da API em tempo de execucao e pode estar em outro host; nesse caso nao enxerga o cookie da API. Entregar o token no corpo funciona em qualquer topologia e ainda permite o cookie `HttpOnly`. `SameSite=Strict` ja e a primeira barreira; o token e a segunda.
+**Por que**: o padrao da empresa e que todo token exista apenas em cookie emitido pelo servidor, sem o front saber. `Origin`/`Referer` sao preenchidos pelo browser e nao podem ser forjados por uma pagina, entao a verificacao e tao forte quanto o token para o cenario de CSRF e dispensa qualquer codigo de cliente. `SameSite=Strict` continua como primeira barreira.
 
 ## 7. Flyway com `ddl-auto: validate`
 
